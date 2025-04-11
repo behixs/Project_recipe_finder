@@ -14,6 +14,9 @@ if "recipes_data" not in st.session_state:
     st.session_state.recipes_data = []
 if "favorites" not in st.session_state:
     st.session_state.favorites = []
+if "show_charts" not in st.session_state:
+    st.session_state.show_charts = True
+
 
 def get_recipes(ingredients: str) -> None:
     """Fetch recipes from Spoonacular API and save them in session state."""
@@ -29,10 +32,12 @@ def get_recipes(ingredients: str) -> None:
         st.session_state.recipes_data = []
         st.error("Something went wrong. Please check your API key or try again later.")
 
+
 def format_amount_number(amount: float) -> str:
     """Round a number to two decimal places and return it as a string."""
     amount = round(amount, 2)
     return str(int(amount)) if amount == int(amount) else str(amount)
+
 
 def create_ingredients_dataframe(people_count: int, recipe: dict) -> pd.DataFrame:
     """Create a DataFrame with ingredient amounts adjusted for the number of people."""
@@ -62,6 +67,10 @@ people_count = st.number_input("Number of people", min_value=1, max_value=100, s
 ingredients = st.text_input("Ingredients", placeholder="Flour, eggs, ...")
 st.button("Search Recipes", on_click=get_recipes, args=(ingredients,))
 
+# Toggle for showing charts
+st.sidebar.subheader("Options")
+st.session_state.show_charts = st.sidebar.checkbox("Show ingredient charts", value=st.session_state.show_charts)
+
 # Display favorites
 if st.session_state.favorites:
     st.subheader("⭐ Favorite Recipes")
@@ -79,18 +88,19 @@ if st.session_state.recipes_data:
 
         with st.container():
             st.markdown(f"## {recipe['title']}")
-            cols = st.columns([1, 2])
+            image_col, content_col = st.columns([1.5, 2])
 
-            with cols[0]:
+            with image_col:
                 # Show recipe image
                 st.image(recipe.get("image", "https://via.placeholder.com/150"), use_container_width=True)
+
+            with content_col:
                 # Favorite button
                 if st.button(f"❤️ Add to favorites: {recipe['title']}"):
                     if recipe['title'] not in st.session_state.favorites:
                         st.session_state.favorites.append(recipe['title'])
                         st.success(f"Added '{recipe['title']}' to favorites")
 
-            with cols[1]:
                 # Show used ingredients as tags
                 st.markdown("**Ingredients used:**")
                 for ing in used_ingredients:
@@ -107,13 +117,15 @@ if st.session_state.recipes_data:
                     for ing in unused_ingredients:
                         st.markdown(f"- {format_amount_number(people_count * ing['amount'])} {ing['unit']} {ing['originalName']}")
 
-                # Show pie chart (smaller)
-                df = create_ingredients_dataframe(people_count, recipe)
-                if not df.empty:
-                    fig, ax = plt.subplots(figsize=(3, 3))  # smaller size
-                    ax.pie(df['Amount'], labels=df.index, autopct='%1.1f%%', startangle=90)
-                    ax.axis('equal')
-                    st.pyplot(fig)
+                # Show smaller pie chart only if toggle is enabled
+                if st.session_state.show_charts:
+                    df = create_ingredients_dataframe(people_count, recipe)
+                    if not df.empty:
+                        with st.container():
+                            fig, ax = plt.subplots(figsize=(2.5, 2.5))
+                            ax.pie(df['Amount'], labels=df.index, autopct='%1.1f%%', startangle=90)
+                            ax.axis('equal')
+                            st.pyplot(fig)
 
 # Generate shopping list from all missing ingredients
 all_missing = [i['originalName'] for r in st.session_state.recipes_data for i in r.get("missedIngredients", [])]
@@ -121,4 +133,3 @@ if all_missing:
     st.subheader("🛒 Shopping List")
     for item in sorted(set(all_missing)):
         st.checkbox(item, key=f"chk_{item}")
-
