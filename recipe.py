@@ -49,17 +49,6 @@ def create_ingredients_dataframe(people_count: int, recipe: dict) -> pd.DataFram
 
 # App layout
 st.set_page_config(page_title="Recipe Finder", page_icon="🥗", layout="wide")
-st.markdown("""
-    <style>
-        body {
-            background-color: #0e1117;
-            color: white;
-        }
-        .stApp {
-            background-color: #0e1117;
-        }
-    </style>
-""", unsafe_allow_html=True)
 
 st.title("Recipe Finder")
 st.write("""
@@ -118,10 +107,10 @@ if st.session_state.recipes_data:
                     for ing in unused_ingredients:
                         st.markdown(f"- {format_amount_number(people_count * ing['amount'])} {ing['unit']} {ing['originalName']}")
 
-                # Show pie chart
+                # Show pie chart (smaller)
                 df = create_ingredients_dataframe(people_count, recipe)
                 if not df.empty:
-                    fig, ax = plt.subplots()
+                    fig, ax = plt.subplots(figsize=(3, 3))  # smaller size
                     ax.pie(df['Amount'], labels=df.index, autopct='%1.1f%%', startangle=90)
                     ax.axis('equal')
                     st.pyplot(fig)
