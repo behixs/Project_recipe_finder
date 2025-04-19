@@ -1,145 +1,157 @@
-# Optimierte Version: Recipe Finder
-
 import os
 import streamlit as st
 import pandas as pd
 import requests
 import matplotlib.pyplot as plt
+from fpdf import FPDF
+import tempfile
 
-# API Key aus Umgebungsvariablen
+# API Key
 API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.spoonacular.com"
 
-# -------------------- API Funktionen --------------------
+# -------------------- Funktionen --------------------
 
-def get_recipes(ingredients: str) -> None:
-    """Speichert Rezepte basierend auf Zutaten in st.session_state."""
+def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
+    """Holt Rezepte basierend auf Zutaten."""
     ingredient_list = [ingredient.strip() for ingredient in ingredients.split(',') if ingredient.strip()]
-    ingredients_url_parameters = ',+'.join(ingredient_list)
-
-    response = requests.get(
-        f"{API_BASE_URL}/recipes/findByIngredients",
-        params={"apiKey": API_KEY, "ingredients": ingredients_url_parameters}
-    )
-
-    if response.status_code == 200:
-        st.session_state.recipes_data = response.json()
-    else:
-        st.session_state.recipes_data = []
-
-
-def get_recipe_information(recipe_id: int) -> dict:
-    """Holt vollständige Rezeptdetails."""
-    response = requests.get(
-        f"{API_BASE_URL}/recipes/{recipe_id}/information",
-        params={"apiKey": API_KEY}
-    )
+    params = {
+        "apiKey": API_KEY,
+        "ingredients": ',+'.join(ingredient_list),
+        "number": 10,
+        "ranking": 1 if sort_by == "popularity" else 2  # 1 = maximize used ingredients, 2 = minimize missing ingredients
+    }
+    response = requests.get(f"{API_BASE_URL}/recipes/findByIngredients", params=params)
     if response.status_code == 200:
         return response.json()
     else:
-        return {}
+        st.error("Failed to fetch recipes. Please check your API Key or ingredients.")
+        return []
 
+def get_recipe_details(recipe_id: int) -> dict:
+    """Holt vollständige Details zu einem Rezept."""
+    params = {"apiKey": API_KEY}
+    response = requests.get(f"{API_BASE_URL}/recipes/{recipe_id}/information", params=params)
+    if response.status_code == 200:
+        return response.json()
+    return {}
 
-def format_amount_number(amount: float) -> str:
-    """Formatiert eine Menge auf zwei Dezimalstellen."""
+def format_amount(amount: float) -> str:
+    """Formatiert eine Zahl schön."""
     amount = round(amount, 2)
     return str(int(amount)) if amount == int(amount) else str(amount)
 
-
-def create_ingredients_dataframe(people_count: int, recipe: dict) -> pd.DataFrame:
-    """Erstellt ein DataFrame der Zutaten."""
-    data = {}
+def create_ingredients_dataframe(recipe: dict, people: int) -> pd.DataFrame:
+    """Erstellt Zutaten-DataFrame."""
+    ingredients = {}
     for ingredient in recipe.get("usedIngredients", []) + recipe.get("missedIngredients", []):
-        name = ingredient['originalName']
-        data[name] = people_count * ingredient['amount']
-    df = pd.DataFrame(list(data.items()), columns=['Ingredient', 'Amount'])
+        name = ingredient["originalName"]
+        ingredients[name] = people * ingredient["amount"]
+    df = pd.DataFrame(list(ingredients.items()), columns=["Ingredient", "Amount"])
     return df
 
-
-def plot_pie_chart(df: pd.DataFrame, title: str) -> None:
-    """Erstellt ein Kreisdiagramm aus einem DataFrame."""
+def plot_pie_chart(df: pd.DataFrame, title: str):
+    """Zeichnet ein Kreisdiagramm."""
+    # Kleine Werte gruppieren
+    df_sorted = df.sort_values("Amount", ascending=False)
+    if len(df_sorted) > 5:
+        top = df_sorted.iloc[:4]
+        others = pd.DataFrame([["Other", df_sorted.iloc[4:]["Amount"].sum()]], columns=["Ingredient", "Amount"])
+        df_sorted = pd.concat([top, others])
     fig, ax = plt.subplots()
-    ax.pie(df['Amount'], labels=df['Ingredient'], autopct='%1.1f%%', startangle=90)
-    ax.axis('equal')  # Kreis statt Oval
-    plt.title(title)
+    ax.pie(df_sorted['Amount'], labels=df_sorted['Ingredient'], autopct='%1.1f%%', startangle=90)
+    ax.axis('equal')
     st.pyplot(fig)
 
-# Streamlit App 
+def generate_pdf(recipe_info: dict):
+    """Erstellt ein PDF des Rezepts."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    pdf.cell(0, 10, recipe_info['title'], ln=True, align='C')
+    pdf.ln(10)
+    pdf.cell(0, 10, f"Ready in {recipe_info.get('readyInMinutes', 'N/A')} minutes", ln=True)
+    pdf.cell(0, 10, f"Servings: {recipe_info.get('servings', 'N/A')}", ln=True)
+    pdf.ln(10)
+    pdf.multi_cell(0, 10, recipe_info.get('instructions', 'No instructions provided.'))
+    
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+    pdf.output(temp_file.name)
+    return temp_file.name
+
+# -------------------- Streamlit App --------------------
 
 # App Konfiguration
-st.set_page_config(page_title="Recipe Finder", page_icon="🍽️")
+st.set_page_config(page_title="Recipe Finder Premium", page_icon="🍽️")
 
-st.title("Recipe Finder")
-st.write("""
-Discover delicious recipes based on the ingredients you have on hand! 
-Simply enter your ingredients and find suitable recipes for your next meal.
-""")
+st.title("🍽️ Recipe Finder Premium")
+st.write("Find perfect recipes with your available ingredients!")
 
 # Eingaben
-st.subheader("Input Ingredients separated by comma")
-people_count = st.number_input("Number of people", min_value=1, max_value=100, step=1, value=1)
-ingredients = st.text_input("Ingredients", placeholder="Flour, eggs, ...")
+with st.sidebar:
+    st.header("Settings")
+    people = st.number_input("Number of People", min_value=1, value=1)
+    ingredients = st.text_input("Ingredients (comma separated)", placeholder="Flour, eggs, cheese...")
+    sort_by = st.radio("Sort recipes by:", ["popularity", "minimize missing ingredients"])
+    search = st.button("🔍 Search Recipes")
 
-# Initialisiere recipes_data falls nicht vorhanden
-if "recipes_data" not in st.session_state:
-    st.session_state.recipes_data = []
+# Initialisiere recipes
+recipes = []
 
-# Rezepte suchen
-st.button("Search Recipes", on_click=get_recipes, args=(ingredients,))
+# Suche auslösen
+if search:
+    if ingredients:
+        recipes = get_recipes(ingredients, sort_by)
+    else:
+        st.warning("Please enter some ingredients first.")
 
-# Ausgabe Rezepte
-if st.session_state.recipes_data:
-    st.subheader("Recipes")
+# Anzeige der Rezepte
+if recipes:
+    for recipe in recipes:
+        with st.container():
+            col1, col2 = st.columns([2, 1])
 
-    for recipe in st.session_state.recipes_data:
-        used_ingredients = recipe.get("usedIngredients", [])
-        missed_ingredients = recipe.get("missedIngredients", [])
-        unused_ingredients = recipe.get("unusedIngredients", [])
+            with col1:
+                st.subheader(recipe["title"])
+                used = [f"{ing['originalName']} ({format_amount(ing['amount'])} {ing['unitLong']})" for ing in recipe.get('usedIngredients', [])]
+                missed = [f"{ing['originalName']} ({format_amount(ing['amount'])} {ing['unitLong']})" for ing in recipe.get('missedIngredients', [])]
 
-        if used_ingredients or missed_ingredients or unused_ingredients:
-            st.markdown(f"## {recipe['title']}")
+                with st.expander("🛒 Ingredients"):
+                    if used:
+                        st.markdown("**Used Ingredients:**")
+                        st.write(", ".join(used))
+                    if missed:
+                        st.markdown("**Missing Ingredients:**")
+                        st.write(", ".join(missed))
 
-        with st.expander("Show Ingredients"):
-            if used_ingredients:
-                st.write("### Ingredients used:")
-                for ingredient in used_ingredients:
-                    amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
+            with col2:
+                st.image(recipe["image"], use_column_width=True)
 
-            if missed_ingredients:
-                st.write("### Missing ingredients:")
-                for ingredient in missed_ingredients:
-                    amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
+            with st.expander("📋 Recipe Details"):
+                details = get_recipe_details(recipe['id'])
+                if details:
+                    st.markdown(f"**Ready in:** {details.get('readyInMinutes', 'N/A')} minutes")
+                    st.markdown(f"**Servings:** {details.get('servings', 'N/A')}")
+                    instructions = details.get('instructions', '')
+                    if instructions:
+                        steps = instructions.split('.')
+                        for idx, step in enumerate(steps):
+                            if step.strip():
+                                st.write(f"{idx+1}. {step.strip()}.")
 
-            if unused_ingredients:
-                st.write("### Ingredients not used:")
-                for ingredient in unused_ingredients:
-                    amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
+                    if st.button(f"⬇️ Download {recipe['title']} as PDF", key=f"pdf_{recipe['id']}"):
+                        file_path = generate_pdf(details)
+                        with open(file_path, "rb") as f:
+                            st.download_button(label="Download PDF", data=f, file_name=f"{recipe['title']}.pdf", mime="application/pdf")
+            st.divider()
 
-        st.image(recipe["image"], caption=recipe["title"], use_column_width=True)
-
-        if st.button(f"Show recipe details", key=f"details_{recipe['id']}"):
-            recipe_info = get_recipe_information(recipe['id'])
-            if recipe_info:
-                st.markdown(f"### Preparation Details")
-                st.markdown(f"**Ready in:** {recipe_info.get('readyInMinutes', 'N/A')} minutes")
-                st.markdown(f"**Servings:** {recipe_info.get('servings', 'N/A')}")
-                st.markdown(f"### Instructions")
-                instructions = recipe_info.get('instructions')
-                if instructions:
-                    steps = instructions.split('.')
-                    for idx, step in enumerate(steps):
-                        if step.strip():
-                            st.write(f"{idx+1}. {step.strip()}.")
-                else:
-                    st.write("No instructions provided.")
-
-        if st.checkbox(f"Show ingredient chart", key=f"chart_{recipe['id']}"):
-            df = create_ingredients_dataframe(people_count, recipe)
-            plot_pie_chart(df, recipe['title'])
+            # Kreisdiagramm
+            if st.checkbox(f"Show Ingredients Chart for {recipe['title']}", key=f"chart_{recipe['id']}"):
+                df = create_ingredients_dataframe(recipe, people)
+                plot_pie_chart(df, recipe['title'])
 
 else:
-    st.info("Enter ingredients and click Search Recipes!")
+    if search:
+        st.info("No recipes found. Try adjusting your ingredients or settings.")
 
