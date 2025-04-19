@@ -19,7 +19,7 @@ def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
         "apiKey": API_KEY,
         "ingredients": ',+'.join(ingredient_list),
         "number": 10,
-        "ranking": 1 if sort_by == "popularity" else 2  # 1 = maximize used ingredients, 2 = minimize missing ingredients
+        "ranking": 1 if sort_by == "popularity" else 2
     }
     response = requests.get(f"{API_BASE_URL}/recipes/findByIngredients", params=params)
     if response.status_code == 200:
@@ -52,7 +52,6 @@ def create_ingredients_dataframe(recipe: dict, people: int) -> pd.DataFrame:
 
 def plot_pie_chart(df: pd.DataFrame, title: str):
     """Zeichnet ein Kreisdiagramm."""
-    # Kleine Werte gruppieren
     df_sorted = df.sort_values("Amount", ascending=False)
     if len(df_sorted) > 5:
         top = df_sorted.iloc[:4]
@@ -69,12 +68,36 @@ def generate_pdf(recipe_info: dict):
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
+    # Titel
     pdf.cell(0, 10, recipe_info['title'], ln=True, align='C')
     pdf.ln(10)
+    
+    # Details
     pdf.cell(0, 10, f"Ready in {recipe_info.get('readyInMinutes', 'N/A')} minutes", ln=True)
     pdf.cell(0, 10, f"Servings: {recipe_info.get('servings', 'N/A')}", ln=True)
     pdf.ln(10)
-    pdf.multi_cell(0, 10, recipe_info.get('instructions', 'No instructions provided.'))
+    
+    # Zutatenliste
+    pdf.set_font("Arial", 'B', size=12)
+    pdf.cell(0, 10, "Ingredients:", ln=True)
+    pdf.set_font("Arial", size=11)
+    for ing in recipe_info.get('extendedIngredients', []):
+        pdf.cell(0, 10, f"- {ing['originalString']}", ln=True)
+    
+    pdf.ln(10)
+    
+    # Anleitung
+    pdf.set_font("Arial", 'B', size=12)
+    pdf.cell(0, 10, "Instructions:", ln=True)
+    pdf.set_font("Arial", size=11)
+    instructions = recipe_info.get('instructions')
+    if instructions:
+        steps = instructions.split('.')
+        for idx, step in enumerate(steps):
+            if step.strip():
+                pdf.multi_cell(0, 10, f"{idx+1}. {step.strip()}")
+    else:
+        pdf.cell(0, 10, "No instructions provided.", ln=True)
     
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
     pdf.output(temp_file.name)
@@ -82,8 +105,7 @@ def generate_pdf(recipe_info: dict):
 
 # -------------------- Streamlit App --------------------
 
-# App Konfiguration
-st.set_page_config(page_title="Recipe Finder Premium", page_icon="🍽️")
+st.set_page_config(page_title="Recipe Finder", page_icon="🍽️")
 
 st.title("🍽️ Recipe Finder Premium")
 st.write("Find perfect recipes with your available ingredients!")
@@ -96,10 +118,8 @@ with st.sidebar:
     sort_by = st.radio("Sort recipes by:", ["popularity", "minimize missing ingredients"])
     search = st.button("🔍 Search Recipes")
 
-# Initialisiere recipes
 recipes = []
 
-# Suche auslösen
 if search:
     if ingredients:
         recipes = get_recipes(ingredients, sort_by)
@@ -126,7 +146,7 @@ if recipes:
                         st.write(", ".join(missed))
 
             with col2:
-                st.image(recipe["image"], use_column_width=True)
+                st.image(recipe["image"], use_container_width=True)
 
             with st.expander("📋 Recipe Details"):
                 details = get_recipe_details(recipe['id'])
@@ -144,9 +164,9 @@ if recipes:
                         file_path = generate_pdf(details)
                         with open(file_path, "rb") as f:
                             st.download_button(label="Download PDF", data=f, file_name=f"{recipe['title']}.pdf", mime="application/pdf")
+
             st.divider()
 
-            # Kreisdiagramm
             if st.checkbox(f"Show Ingredients Chart for {recipe['title']}", key=f"chart_{recipe['id']}"):
                 df = create_ingredients_dataframe(recipe, people)
                 plot_pie_chart(df, recipe['title'])
