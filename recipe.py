@@ -5,33 +5,12 @@ import requests
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 import tempfile
-from html.parser import HTMLParser
 
-# API Key
+# API
 API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.spoonacular.com"
 
-# -------------------- Hilfsfunktionen --------------------
-
-class MLStripper(HTMLParser):
-    """Hilfsklasse zum Entfernen von HTML."""
-    def __init__(self):
-        super().__init__()
-        self.reset()
-        self.fed = []
-
-    def handle_data(self, d):
-        self.fed.append(d)
-
-    def get_data(self):
-        return ''.join(self.fed)
-
-def strip_html(html_text: str) -> str:
-    """Entfernt HTML-Tags aus Text."""
-    s = MLStripper()
-    s.feed(html_text)
-    return s.get_data()
-
+# Funktionen
 def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
     ingredient_list = [ingredient.strip() for ingredient in ingredients.split(',') if ingredient.strip()]
     params = {
@@ -41,18 +20,12 @@ def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
         "ranking": 1 if sort_by == "popularity" else 2
     }
     response = requests.get(f"{API_BASE_URL}/recipes/findByIngredients", params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error("Failed to fetch recipes. Please check your API Key or ingredients.")
-        return []
+    return response.json() if response.status_code == 200 else []
 
 def get_recipe_details(recipe_id: int) -> dict:
     params = {"apiKey": API_KEY}
     response = requests.get(f"{API_BASE_URL}/recipes/{recipe_id}/information", params=params)
-    if response.status_code == 200:
-        return response.json()
-    return {}
+    return response.json() if response.status_code == 200 else {}
 
 def format_amount(amount: float) -> str:
     amount = round(amount, 2)
@@ -75,50 +48,23 @@ def plot_pie_chart(df: pd.DataFrame, title: str):
     fig, ax = plt.subplots()
     ax.pie(df_sorted['Amount'], labels=df_sorted['Ingredient'], autopct='%1.1f%%', startangle=90)
     ax.axis('equal')
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=True)
 
-def generate_pdf(recipe_info: dict):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    
-    pdf.cell(0, 10, recipe_info['title'], ln=True, align='C')
-    pdf.ln(10)
-    pdf.cell(0, 10, f"Ready in {recipe_info.get('readyInMinutes', 'N/A')} minutes", ln=True)
-    pdf.cell(0, 10, f"Servings: {recipe_info.get('servings', 'N/A')}", ln=True)
-    pdf.ln(10)
-    
-    pdf.set_font("Arial", 'B', size=12)
-    pdf.cell(0, 10, "Ingredients:", ln=True)
-    pdf.set_font("Arial", size=11)
-    for ing in recipe_info.get('extendedIngredients', []):
-        pdf.cell(0, 10, f"- {ing['originalString']}", ln=True)
-    
-    pdf.ln(10)
-    pdf.set_font("Arial", 'B', size=12)
-    pdf.cell(0, 10, "Instructions:", ln=True)
-    pdf.set_font("Arial", size=11)
-    instructions = strip_html(recipe_info.get('instructions', ''))
-    if instructions:
-        steps = instructions.split('.')
-        for idx, step in enumerate(steps):
-            if step.strip():
-                pdf.multi_cell(0, 10, f"{idx+1}. {step.strip()}")
-    else:
-        pdf.cell(0, 10, "No instructions provided.", ln=True)
-    
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-    pdf.output(temp_file.name)
-    return temp_file.name
+def extract_instructions(details: dict) -> list:
+    """Nimmt saubere Kochschritte aus analyzedInstructions."""
+    steps = []
+    if details.get('analyzedInstructions'):
+        for step in details['analyzedInstructions'][0]['steps']:
+            steps.append(step['step'])
+    return steps
 
-# -------------------- Streamlit App --------------------
-
+# Streamlit App
 st.set_page_config(page_title="Recipe Finder Premium", page_icon="")
 
 st.title("Recipe Finder Premium")
-st.write("Find perfect recipes with your available ingredients.")
+st.write("Find perfect recipes based on your available ingredients.")
 
-# Eingaben
+# Sidebar Eingaben
 with st.sidebar:
     st.header("Settings")
     people = st.number_input("Number of People", min_value=1, value=1)
@@ -128,13 +74,10 @@ with st.sidebar:
 
 recipes = []
 
-if search:
-    if ingredients:
-        recipes = get_recipes(ingredients, sort_by)
-    else:
-        st.warning("Please enter some ingredients first.")
+if search and ingredients:
+    recipes = get_recipes(ingredients, sort_by)
 
-# Anzeige der Rezepte
+# Ausgabe
 if recipes:
     for recipe in recipes:
         with st.container():
@@ -161,20 +104,13 @@ if recipes:
                 if details:
                     st.markdown(f"**Ready in:** {details.get('readyInMinutes', 'N/A')} minutes")
                     st.markdown(f"**Servings:** {details.get('servings', 'N/A')}")
-                    instructions_raw = details.get('instructions', '')
-                    instructions_clean = strip_html(instructions_raw)
-                    if instructions_clean:
-                        steps = instructions_clean.split('.')
-                        for idx, step in enumerate(steps):
-                            if step.strip():
-                                st.write(f"{idx+1}. {step.strip()}")
-                    else:
-                        st.write("No instructions provided.")
 
-                    if st.button(f"Download {recipe['title']} as PDF", key=f"pdf_{recipe['id']}"):
-                        file_path = generate_pdf(details)
-                        with open(file_path, "rb") as f:
-                            st.download_button(label="Download PDF", data=f, file_name=f"{recipe['title']}.pdf", mime="application/pdf")
+                    instructions = extract_instructions(details)
+                    if instructions:
+                        for idx, step in enumerate(instructions):
+                            st.write(f"{idx+1}. {step}")
+                    else:
+                        st.write("No detailed instructions provided.")
 
             st.divider()
 
@@ -184,5 +120,4 @@ if recipes:
 
 else:
     if search:
-        st.info("No recipes found. Try adjusting your ingredients or settings.")
-
+        st.warning("No recipes found. Try different ingredients.")
