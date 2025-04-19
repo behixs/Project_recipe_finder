@@ -50,7 +50,7 @@ def create_ingredients_dataframe(people_count: int, recipe: dict) -> pd.DataFram
     """Erstellt ein DataFrame der Zutaten."""
     data = {}
     for ingredient in recipe.get("usedIngredients", []) + recipe.get("missedIngredients", []):
-        name = ingredient['name']
+        name = ingredient['originalName']
         data[name] = people_count * ingredient['amount']
     df = pd.DataFrame(list(data.items()), columns=['Ingredient', 'Amount'])
     return df
@@ -64,7 +64,7 @@ def plot_pie_chart(df: pd.DataFrame, title: str) -> None:
     plt.title(title)
     st.pyplot(fig)
 
-# -------------------- Streamlit App --------------------
+# Streamlit App 
 
 # App Konfiguration
 st.set_page_config(page_title="Recipe Finder", page_icon="🍽️")
@@ -104,19 +104,19 @@ if st.session_state.recipes_data:
                 st.write("### Ingredients used:")
                 for ingredient in used_ingredients:
                     amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['name']}")
+                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
 
             if missed_ingredients:
                 st.write("### Missing ingredients:")
                 for ingredient in missed_ingredients:
                     amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['name']}")
+                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
 
             if unused_ingredients:
                 st.write("### Ingredients not used:")
                 for ingredient in unused_ingredients:
                     amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['name']}")
+                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
 
         st.image(recipe["image"], caption=recipe["title"], use_column_width=True)
 
@@ -129,7 +129,10 @@ if st.session_state.recipes_data:
                 st.markdown(f"### Instructions")
                 instructions = recipe_info.get('instructions')
                 if instructions:
-                    st.write(instructions)
+                    steps = instructions.split('.')
+                    for idx, step in enumerate(steps):
+                        if step.strip():
+                            st.write(f"{idx+1}. {step.strip()}.")
                 else:
                     st.write("No instructions provided.")
 
@@ -139,3 +142,4 @@ if st.session_state.recipes_data:
 
 else:
     st.info("Enter ingredients and click Search Recipes!")
+
