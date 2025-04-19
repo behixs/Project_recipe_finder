@@ -6,11 +6,12 @@ import matplotlib.pyplot as plt
 from fpdf import FPDF
 import tempfile
 
-# API
+# API Key
 API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.spoonacular.com"
 
-# Funktionen
+# -------------------- Funktionen --------------------
+
 def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
     ingredient_list = [ingredient.strip() for ingredient in ingredients.split(',') if ingredient.strip()]
     params = {
@@ -48,17 +49,19 @@ def plot_pie_chart(df: pd.DataFrame, title: str):
     fig, ax = plt.subplots()
     ax.pie(df_sorted['Amount'], labels=df_sorted['Ingredient'], autopct='%1.1f%%', startangle=90)
     ax.axis('equal')
-    st.pyplot(fig, use_container_width=True)
+    plt.title(title)
+    st.pyplot(fig)
 
 def extract_instructions(details: dict) -> list:
-    """Nimmt saubere Kochschritte aus analyzedInstructions."""
+    """Saubere Kochschritte aus analyzedInstructions extrahieren."""
     steps = []
     if details.get('analyzedInstructions'):
         for step in details['analyzedInstructions'][0]['steps']:
             steps.append(step['step'])
     return steps
 
-# Streamlit App
+# -------------------- Streamlit App --------------------
+
 st.set_page_config(page_title="Recipe Finder Premium", page_icon="")
 
 st.title("Recipe Finder Premium")
@@ -70,6 +73,7 @@ with st.sidebar:
     people = st.number_input("Number of People", min_value=1, value=1)
     ingredients = st.text_input("Ingredients (comma separated)", placeholder="Flour, eggs, cheese...")
     sort_by = st.radio("Sort recipes by:", ["popularity", "minimize missing ingredients"])
+    chart_type = st.radio("Select chart type:", ["Pie Chart", "Bar Chart"])
     search = st.button("Search Recipes")
 
 recipes = []
@@ -77,7 +81,7 @@ recipes = []
 if search and ingredients:
     recipes = get_recipes(ingredients, sort_by)
 
-# Ausgabe
+# Anzeige der Rezepte
 if recipes:
     for recipe in recipes:
         with st.container():
@@ -116,7 +120,10 @@ if recipes:
 
             if st.checkbox(f"Show Ingredients Chart for {recipe['title']}", key=f"chart_{recipe['id']}"):
                 df = create_ingredients_dataframe(recipe, people)
-                plot_pie_chart(df, recipe['title'])
+                if chart_type == "Pie Chart":
+                    plot_pie_chart(df, recipe['title'])
+                else:
+                    st.bar_chart(df.set_index('Ingredient'))
 
 else:
     if search:
