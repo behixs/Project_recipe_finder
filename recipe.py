@@ -50,17 +50,16 @@ def create_ingredients_dataframe(people_count: int, recipe: dict) -> pd.DataFram
     """Erstellt ein DataFrame der Zutaten."""
     data = {}
     for ingredient in recipe.get("usedIngredients", []) + recipe.get("missedIngredients", []):
-        name = ingredient['originalName']
+        name = ingredient['name']
         data[name] = people_count * ingredient['amount']
-    df = pd.DataFrame.from_dict(data, orient='index', columns=['Amount'])
-    df.index.name = 'Ingredient'
+    df = pd.DataFrame(list(data.items()), columns=['Ingredient', 'Amount'])
     return df
 
 
 def plot_pie_chart(df: pd.DataFrame, title: str) -> None:
     """Erstellt ein Kreisdiagramm aus einem DataFrame."""
     fig, ax = plt.subplots()
-    ax.pie(df['Amount'], labels=df.index, autopct='%1.1f%%', startangle=90)
+    ax.pie(df['Amount'], labels=df['Ingredient'], autopct='%1.1f%%', startangle=90)
     ax.axis('equal')  # Kreis statt Oval
     plt.title(title)
     st.pyplot(fig)
@@ -98,42 +97,45 @@ if st.session_state.recipes_data:
         unused_ingredients = recipe.get("unusedIngredients", [])
 
         if used_ingredients or missed_ingredients or unused_ingredients:
-            st.markdown(f"<h4>{recipe['title']}</h4>", unsafe_allow_html=True)
+            st.markdown(f"## {recipe['title']}")
 
-        col1, col2 = st.columns([1, 2])
-
-        with col1:
+        with st.expander("Show Ingredients"):
             if used_ingredients:
-                st.write("Ingredients used:")
+                st.write("### Ingredients used:")
                 for ingredient in used_ingredients:
                     amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
+                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['name']}")
 
             if missed_ingredients:
-                st.write("Missing ingredients:")
+                st.write("### Missing ingredients:")
                 for ingredient in missed_ingredients:
                     amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
+                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['name']}")
 
             if unused_ingredients:
-                st.write("Ingredients not used:")
+                st.write("### Ingredients not used:")
                 for ingredient in unused_ingredients:
                     amount_str = format_amount_number(people_count * ingredient['amount'])
-                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['originalName']}")
+                    st.write(f"- {amount_str} {ingredient['unitLong']} {ingredient['name']}")
 
-            # Button für zusätzliche Details
-            if st.button(f"Show details for {recipe['title']}", key=recipe['id']):
-                recipe_info = get_recipe_information(recipe['id'])
-                if recipe_info:
-                    st.markdown(f"**Ready in:** {recipe_info.get('readyInMinutes', 'N/A')} minutes")
-                    st.markdown(f"**Servings:** {recipe_info.get('servings', 'N/A')}")
-                    st.markdown(f"**Instructions:** {recipe_info.get('instructions', 'No instructions provided.')}")
+        st.image(recipe["image"], caption=recipe["title"], use_column_width=True)
 
-        with col2:
-            st.image(recipe["image"], caption=recipe["title"], use_column_width=True)
-            if st.checkbox(f"Show chart for {recipe['title']}", key=f"chart_{recipe['id']}"):
-                df = create_ingredients_dataframe(people_count, recipe)
-                plot_pie_chart(df, recipe['title'])
+        if st.button(f"Show recipe details", key=f"details_{recipe['id']}"):
+            recipe_info = get_recipe_information(recipe['id'])
+            if recipe_info:
+                st.markdown(f"### Preparation Details")
+                st.markdown(f"**Ready in:** {recipe_info.get('readyInMinutes', 'N/A')} minutes")
+                st.markdown(f"**Servings:** {recipe_info.get('servings', 'N/A')}")
+                st.markdown(f"### Instructions")
+                instructions = recipe_info.get('instructions')
+                if instructions:
+                    st.write(instructions)
+                else:
+                    st.write("No instructions provided.")
+
+        if st.checkbox(f"Show ingredient chart", key=f"chart_{recipe['id']}"):
+            df = create_ingredients_dataframe(people_count, recipe)
+            plot_pie_chart(df, recipe['title'])
 
 else:
     st.info("Enter ingredients and click Search Recipes!")
