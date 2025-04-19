@@ -13,7 +13,6 @@ API_BASE_URL = "https://api.spoonacular.com"
 # -------------------- Funktionen --------------------
 
 def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
-    """Holt Rezepte basierend auf Zutaten."""
     ingredient_list = [ingredient.strip() for ingredient in ingredients.split(',') if ingredient.strip()]
     params = {
         "apiKey": API_KEY,
@@ -29,7 +28,6 @@ def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
         return []
 
 def get_recipe_details(recipe_id: int) -> dict:
-    """Holt vollständige Details zu einem Rezept."""
     params = {"apiKey": API_KEY}
     response = requests.get(f"{API_BASE_URL}/recipes/{recipe_id}/information", params=params)
     if response.status_code == 200:
@@ -37,12 +35,10 @@ def get_recipe_details(recipe_id: int) -> dict:
     return {}
 
 def format_amount(amount: float) -> str:
-    """Formatiert eine Zahl schön."""
     amount = round(amount, 2)
     return str(int(amount)) if amount == int(amount) else str(amount)
 
 def create_ingredients_dataframe(recipe: dict, people: int) -> pd.DataFrame:
-    """Erstellt Zutaten-DataFrame."""
     ingredients = {}
     for ingredient in recipe.get("usedIngredients", []) + recipe.get("missedIngredients", []):
         name = ingredient["originalName"]
@@ -51,7 +47,6 @@ def create_ingredients_dataframe(recipe: dict, people: int) -> pd.DataFrame:
     return df
 
 def plot_pie_chart(df: pd.DataFrame, title: str):
-    """Zeichnet ein Kreisdiagramm."""
     df_sorted = df.sort_values("Amount", ascending=False)
     if len(df_sorted) > 5:
         top = df_sorted.iloc[:4]
@@ -63,21 +58,16 @@ def plot_pie_chart(df: pd.DataFrame, title: str):
     st.pyplot(fig)
 
 def generate_pdf(recipe_info: dict):
-    """Erstellt ein PDF des Rezepts."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
-    # Titel
     pdf.cell(0, 10, recipe_info['title'], ln=True, align='C')
     pdf.ln(10)
-    
-    # Details
     pdf.cell(0, 10, f"Ready in {recipe_info.get('readyInMinutes', 'N/A')} minutes", ln=True)
     pdf.cell(0, 10, f"Servings: {recipe_info.get('servings', 'N/A')}", ln=True)
     pdf.ln(10)
     
-    # Zutatenliste
     pdf.set_font("Arial", 'B', size=12)
     pdf.cell(0, 10, "Ingredients:", ln=True)
     pdf.set_font("Arial", size=11)
@@ -85,8 +75,6 @@ def generate_pdf(recipe_info: dict):
         pdf.cell(0, 10, f"- {ing['originalString']}", ln=True)
     
     pdf.ln(10)
-    
-    # Anleitung
     pdf.set_font("Arial", 'B', size=12)
     pdf.cell(0, 10, "Instructions:", ln=True)
     pdf.set_font("Arial", size=11)
@@ -105,10 +93,10 @@ def generate_pdf(recipe_info: dict):
 
 # -------------------- Streamlit App --------------------
 
-st.set_page_config(page_title="Recipe Finder", page_icon="🍽️")
+st.set_page_config(page_title="Recipe Finder Premium", page_icon="")
 
-st.title("🍽️ Recipe Finder Premium")
-st.write("Find perfect recipes with your available ingredients!")
+st.title("Recipe Finder Premium")
+st.write("Find perfect recipes with your available ingredients.")
 
 # Eingaben
 with st.sidebar:
@@ -116,7 +104,7 @@ with st.sidebar:
     people = st.number_input("Number of People", min_value=1, value=1)
     ingredients = st.text_input("Ingredients (comma separated)", placeholder="Flour, eggs, cheese...")
     sort_by = st.radio("Sort recipes by:", ["popularity", "minimize missing ingredients"])
-    search = st.button("🔍 Search Recipes")
+    search = st.button("Search Recipes")
 
 recipes = []
 
@@ -137,7 +125,7 @@ if recipes:
                 used = [f"{ing['originalName']} ({format_amount(ing['amount'])} {ing['unitLong']})" for ing in recipe.get('usedIngredients', [])]
                 missed = [f"{ing['originalName']} ({format_amount(ing['amount'])} {ing['unitLong']})" for ing in recipe.get('missedIngredients', [])]
 
-                with st.expander("🛒 Ingredients"):
+                with st.expander("Ingredients"):
                     if used:
                         st.markdown("**Used Ingredients:**")
                         st.write(", ".join(used))
@@ -148,7 +136,7 @@ if recipes:
             with col2:
                 st.image(recipe["image"], use_container_width=True)
 
-            with st.expander("📋 Recipe Details"):
+            with st.expander("Recipe Details"):
                 details = get_recipe_details(recipe['id'])
                 if details:
                     st.markdown(f"**Ready in:** {details.get('readyInMinutes', 'N/A')} minutes")
@@ -160,7 +148,7 @@ if recipes:
                             if step.strip():
                                 st.write(f"{idx+1}. {step.strip()}.")
 
-                    if st.button(f"⬇️ Download {recipe['title']} as PDF", key=f"pdf_{recipe['id']}"):
+                    if st.button(f"Download {recipe['title']} as PDF", key=f"pdf_{recipe['id']}"):
                         file_path = generate_pdf(details)
                         with open(file_path, "rb") as f:
                             st.download_button(label="Download PDF", data=f, file_name=f"{recipe['title']}.pdf", mime="application/pdf")
