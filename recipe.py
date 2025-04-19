@@ -5,12 +5,32 @@ import requests
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 import tempfile
+from html.parser import HTMLParser
 
 # API Key
 API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.spoonacular.com"
 
-# -------------------- Funktionen --------------------
+# -------------------- Hilfsfunktionen --------------------
+
+class MLStripper(HTMLParser):
+    """Hilfsklasse zum Entfernen von HTML."""
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.fed = []
+
+    def handle_data(self, d):
+        self.fed.append(d)
+
+    def get_data(self):
+        return ''.join(self.fed)
+
+def strip_html(html_text: str) -> str:
+    """Entfernt HTML-Tags aus Text."""
+    s = MLStripper()
+    s.feed(html_text)
+    return s.get_data()
 
 def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
     ingredient_list = [ingredient.strip() for ingredient in ingredients.split(',') if ingredient.strip()]
@@ -78,7 +98,7 @@ def generate_pdf(recipe_info: dict):
     pdf.set_font("Arial", 'B', size=12)
     pdf.cell(0, 10, "Instructions:", ln=True)
     pdf.set_font("Arial", size=11)
-    instructions = recipe_info.get('instructions')
+    instructions = strip_html(recipe_info.get('instructions', ''))
     if instructions:
         steps = instructions.split('.')
         for idx, step in enumerate(steps):
@@ -141,12 +161,15 @@ if recipes:
                 if details:
                     st.markdown(f"**Ready in:** {details.get('readyInMinutes', 'N/A')} minutes")
                     st.markdown(f"**Servings:** {details.get('servings', 'N/A')}")
-                    instructions = details.get('instructions', '')
-                    if instructions:
-                        steps = instructions.split('.')
+                    instructions_raw = details.get('instructions', '')
+                    instructions_clean = strip_html(instructions_raw)
+                    if instructions_clean:
+                        steps = instructions_clean.split('.')
                         for idx, step in enumerate(steps):
                             if step.strip():
-                                st.write(f"{idx+1}. {step.strip()}.")
+                                st.write(f"{idx+1}. {step.strip()}")
+                    else:
+                        st.write("No instructions provided.")
 
                     if st.button(f"Download {recipe['title']} as PDF", key=f"pdf_{recipe['id']}"):
                         file_path = generate_pdf(details)
