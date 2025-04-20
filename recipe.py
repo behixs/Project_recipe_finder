@@ -58,9 +58,12 @@ def plot_chart(df: pd.DataFrame, title: str, chart_type: str):
     elif chart_type == "Bar Chart":
         ax.bar(df_sorted['Ingredient'], df_sorted['Amount'])
         ax.set_ylabel("Amount")
-        plt.xticks(rotation=45, ha="right")
+        ax.set_xlabel("Ingredients")
+        ax.set_xticks(range(len(df_sorted)))
+        ax.set_xticklabels(df_sorted['Ingredient'], rotation=45, ha="right")
 
-    plt.title(title)
+    ax.set_title(title)
+    fig.tight_layout()  # <<< wichtig, damit es korrekt angezeigt wird
     st.pyplot(fig)
 
 def extract_instructions(details: dict) -> list:
@@ -135,4 +138,5 @@ if recipes:
 else:
     if search:
         st.warning("No recipes found. Try different ingredients.")
+
 
