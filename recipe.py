@@ -48,7 +48,9 @@ def plot_chart(df: pd.DataFrame, title: str, chart_type: str):
         others = pd.DataFrame([["Other", df_sorted.iloc[4:]["Amount"].sum()]], columns=["Ingredient", "Amount"])
         df_sorted = pd.concat([top, others])
 
-    fig, ax = plt.subplots()
+    # Dynamische Anpassung der Plotgröße
+    fig_width = max(6, min(10, len(df_sorted) * 1.5))
+    fig, ax = plt.subplots(figsize=(fig_width, 6))
 
     if chart_type == "Pie Chart":
         ax.pie(df_sorted['Amount'], labels=df_sorted['Ingredient'], autopct='%1.1f%%', startangle=90)
@@ -56,7 +58,7 @@ def plot_chart(df: pd.DataFrame, title: str, chart_type: str):
     elif chart_type == "Bar Chart":
         ax.bar(df_sorted['Ingredient'], df_sorted['Amount'])
         ax.set_ylabel("Amount")
-        ax.set_xticklabels(df_sorted['Ingredient'], rotation=45, ha="right")
+        plt.xticks(rotation=45, ha="right")
 
     plt.title(title)
     st.pyplot(fig)
@@ -133,3 +135,4 @@ if recipes:
 else:
     if search:
         st.warning("No recipes found. Try different ingredients.")
+
