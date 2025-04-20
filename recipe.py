@@ -12,6 +12,7 @@ API_BASE_URL = "https://api.spoonacular.com"
 
 # -------------------- Funktionen --------------------
 
+@st.cache_data
 def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
     ingredient_list = [ingredient.strip() for ingredient in ingredients.split(',') if ingredient.strip()]
     params = {
@@ -23,8 +24,9 @@ def get_recipes(ingredients: str, sort_by: str = "popularity") -> list:
     response = requests.get(f"{API_BASE_URL}/recipes/findByIngredients", params=params)
     return response.json() if response.status_code == 200 else []
 
+@st.cache_data
 def get_recipe_details(recipe_id: int) -> dict:
-    params = {"apiKey": API_KEY}
+    params = {"apiKey": API_KEY, "includeNutrition": True}
     response = requests.get(f"{API_BASE_URL}/recipes/{recipe_id}/information", params=params)
     return response.json() if response.status_code == 200 else {}
 
@@ -48,7 +50,6 @@ def plot_chart(df: pd.DataFrame, title: str, chart_type: str):
         others = pd.DataFrame([["Other", df_sorted.iloc[4:]["Amount"].sum()]], columns=["Ingredient", "Amount"])
         df_sorted = pd.concat([top, others])
 
-    # Dynamische Anpassung der Plotgröße
     fig_width = max(6, min(10, len(df_sorted) * 1.5))
     fig, ax = plt.subplots(figsize=(fig_width, 6))
 
@@ -63,16 +64,26 @@ def plot_chart(df: pd.DataFrame, title: str, chart_type: str):
         ax.set_xticklabels(df_sorted['Ingredient'], rotation=45, ha="right")
 
     ax.set_title(title)
-    fig.tight_layout()  # <<< wichtig, damit es korrekt angezeigt wird
+    fig.tight_layout()
     st.pyplot(fig)
 
 def extract_instructions(details: dict) -> list:
-    """Saubere Kochschritte aus analyzedInstructions extrahieren."""
     steps = []
     if details.get('analyzedInstructions'):
         for step in details['analyzedInstructions'][0]['steps']:
             steps.append(step['step'])
     return steps
+
+def extract_nutrition_info(details: dict) -> dict:
+    nutrition = {}
+    if details.get('nutrition') and details['nutrition'].get('nutrients'):
+        for nutrient in details['nutrition']['nutrients']:
+            name = nutrient.get('name')
+            amount = nutrient.get('amount')
+            unit = nutrient.get('unit')
+            if name in ['Calories', 'Protein', 'Fat', 'Carbohydrates']:
+                nutrition[name] = f"{amount} {unit}"
+    return nutrition
 
 # -------------------- Streamlit App --------------------
 
@@ -81,11 +92,13 @@ st.set_page_config(page_title="Recipe Finder Premium", page_icon="")
 st.title("Recipe Finder Premium")
 st.write("Find perfect recipes based on your available ingredients.")
 
-# Sidebar Eingaben
+# Sidebar Eingaben – schönere Struktur
 with st.sidebar:
-    st.header("Settings")
+    st.header("Ingredients & People")
     people = st.number_input("Number of People", min_value=1, value=1)
     ingredients = st.text_input("Ingredients (comma separated)", placeholder="Flour, eggs, cheese...")
+
+    st.header("Search Options")
     sort_by = st.radio("Sort recipes by:", ["popularity", "minimize missing ingredients"])
     chart_type = st.radio("Select chart type:", ["Pie Chart", "Bar Chart"])
     search = st.button("Search Recipes")
@@ -123,12 +136,21 @@ if recipes:
                     st.markdown(f"**Ready in:** {details.get('readyInMinutes', 'N/A')} minutes")
                     st.markdown(f"**Servings:** {details.get('servings', 'N/A')}")
 
+                    # Kochanleitung
                     instructions = extract_instructions(details)
                     if instructions:
+                        st.markdown("### Instructions")
                         for idx, step in enumerate(instructions):
                             st.write(f"{idx+1}. {step}")
                     else:
                         st.write("No detailed instructions provided.")
+
+                    # Nährwerte
+                    nutrition = extract_nutrition_info(details)
+                    if nutrition:
+                        st.markdown("### Nutrition Facts")
+                        for key, value in nutrition.items():
+                            st.write(f"**{key}:** {value}")
 
             st.divider()
 
