@@ -40,15 +40,24 @@ def create_ingredients_dataframe(recipe: dict, people: int) -> pd.DataFrame:
     df = pd.DataFrame(list(ingredients.items()), columns=["Ingredient", "Amount"])
     return df
 
-def plot_pie_chart(df: pd.DataFrame, title: str):
+def plot_chart(df: pd.DataFrame, title: str, chart_type: str):
     df_sorted = df.sort_values("Amount", ascending=False)
+
     if len(df_sorted) > 5:
         top = df_sorted.iloc[:4]
         others = pd.DataFrame([["Other", df_sorted.iloc[4:]["Amount"].sum()]], columns=["Ingredient", "Amount"])
         df_sorted = pd.concat([top, others])
+
     fig, ax = plt.subplots()
-    ax.pie(df_sorted['Amount'], labels=df_sorted['Ingredient'], autopct='%1.1f%%', startangle=90)
-    ax.axis('equal')
+
+    if chart_type == "Pie Chart":
+        ax.pie(df_sorted['Amount'], labels=df_sorted['Ingredient'], autopct='%1.1f%%', startangle=90)
+        ax.axis('equal')
+    elif chart_type == "Bar Chart":
+        ax.bar(df_sorted['Ingredient'], df_sorted['Amount'])
+        ax.set_ylabel("Amount")
+        ax.set_xticklabels(df_sorted['Ingredient'], rotation=45, ha="right")
+
     plt.title(title)
     st.pyplot(fig)
 
@@ -120,11 +129,7 @@ if recipes:
 
             if st.checkbox(f"Show Ingredients Chart for {recipe['title']}", key=f"chart_{recipe['id']}"):
                 df = create_ingredients_dataframe(recipe, people)
-                if chart_type == "Pie Chart":
-                    plot_pie_chart(df, recipe['title'])
-                else:
-                    st.bar_chart(df.set_index('Ingredient'))
-
+                plot_chart(df, recipe['title'], chart_type)
 else:
     if search:
         st.warning("No recipes found. Try different ingredients.")
