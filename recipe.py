@@ -98,7 +98,7 @@ if st.button("Search Recipes"):
 
                 with col1:
                     # Display recipe image and ingredients
-                    st.image(recipe_info['image'], use_column_width=True)
+                    st.image(recipe_info['image'], use_container_width=True)
                     ingredients_list = []
                     for ing in recipe['usedIngredients'] + recipe['missedIngredients']:
                         amount = format_amount(ing['amount'] * people_count)
@@ -111,14 +111,15 @@ if st.button("Search Recipes"):
                     nutrients = {}
                     if 'nutrition' in recipe_info:
                         for nutrient in recipe_info['nutrition']['nutrients']:
-                            if nutrient['title'] == 'Calories':
-                                nutrients['calories'] = nutrient['amount']
-                            elif nutrient['title'] == 'Protein':
-                                nutrients['protein'] = nutrient['amount']
-                            elif nutrient['title'] == 'Fat':
-                                nutrients['fat'] = nutrient['amount']
-                            elif nutrient['title'] == 'Carbohydrates':
-                                nutrients['carbs'] = nutrient['amount']
+                            if 'title' in nutrient:
+                                if nutrient['title'] == 'Calories':
+                                    nutrients['calories'] = nutrient['amount']
+                                elif nutrient['title'] == 'Protein':
+                                    nutrients['protein'] = nutrient['amount']
+                                elif nutrient['title'] == 'Fat':
+                                    nutrients['fat'] = nutrient['amount']
+                                elif nutrient['title'] == 'Carbohydrates':
+                                    nutrients['carbs'] = nutrient['amount']
                     st.write("**Nutrition:**", nutrients)
 
                     # Buttons to generate PDFs
@@ -134,4 +135,3 @@ if st.button("Search Recipes"):
                     # Plot selected chart type
                     df = create_ingredients_df(people_count, recipe)
                     plot_chart(df, chart_option)
-
