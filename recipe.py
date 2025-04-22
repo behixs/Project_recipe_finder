@@ -25,7 +25,7 @@ def get_recipes(ingredients: str) -> list:
         return []
 
 def get_recipe_information(recipe_id: int) -> dict:
-    """Fetch detailed recipe information including nutrition."""
+    """Fetch detailed recipe information including nutrition and instructions."""
     url = f"{API_BASE_URL}/recipes/{recipe_id}/information"
     params = {"apiKey": API_KEY, "includeNutrition": True}
     response = requests.get(url, params=params)
@@ -49,21 +49,39 @@ def create_ingredients_df(people_count: int, recipe: dict) -> pd.DataFrame:
     df = pd.DataFrame(list(data.items()), columns=['Ingredient', 'Amount'])
     return df
 
-def save_pdf(title: str, ingredients: list, nutrients: dict, filename: str):
-    """Save recipe and nutrition information as a PDF."""
+def save_recipe_pdf(title: str, ingredients: list, summary: str, steps: list, nutrients: dict, filename: str):
+    """Save full recipe (ingredients, summary, steps, nutrition) as a PDF."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     pdf.cell(0, 10, f"Recipe: {title}", ln=True)
+    pdf.ln(5)
+    pdf.multi_cell(0, 10, summary)
+    pdf.ln(5)
     pdf.cell(0, 10, "Ingredients:", ln=True)
     for ing in ingredients:
         pdf.cell(0, 10, f"- {ing}", ln=True)
+    pdf.ln(5)
+    pdf.cell(0, 10, "Instructions:", ln=True)
+    for idx, step in enumerate(steps, 1):
+        pdf.multi_cell(0, 10, f"Step {idx}: {step}")
     pdf.ln(5)
     pdf.cell(0, 10, "Nutrition (per serving):", ln=True)
     pdf.cell(0, 10, f"Calories: {nutrients.get('calories', 'N/A')} kcal", ln=True)
     pdf.cell(0, 10, f"Protein: {nutrients.get('protein', 'N/A')} g", ln=True)
     pdf.cell(0, 10, f"Fat: {nutrients.get('fat', 'N/A')} g", ln=True)
     pdf.cell(0, 10, f"Carbs: {nutrients.get('carbs', 'N/A')} g", ln=True)
+    pdf.output(filename)
+
+def save_shopping_list_pdf(title: str, ingredients: list, filename: str):
+    """Save only the shopping list as a PDF."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 10, f"Shopping List for: {title}", ln=True)
+    pdf.ln(5)
+    for ing in ingredients:
+        pdf.cell(0, 10, f"- {ing}", ln=True)
     pdf.output(filename)
 
 def plot_chart(df: pd.DataFrame, chart_type: str):
@@ -97,7 +115,6 @@ if st.button("Search Recipes"):
                 col1, col2 = st.columns([1, 2])
 
                 with col1:
-                    # Display recipe image and ingredients
                     st.image(recipe_info['image'], use_container_width=True)
                     ingredients_list = []
                     for ing in recipe['usedIngredients'] + recipe['missedIngredients']:
@@ -107,7 +124,6 @@ if st.button("Search Recipes"):
                         ingredients_list.append(f"{amount} {unit} {name}")
                     st.write("\n".join(ingredients_list))
 
-                    # Display nutrition information
                     nutrients = {}
                     if 'nutrition' in recipe_info:
                         for nutrient in recipe_info['nutrition']['nutrients']:
@@ -122,16 +138,29 @@ if st.button("Search Recipes"):
                                     nutrients['carbs'] = nutrient['amount']
                     st.write("**Nutrition:**", nutrients)
 
+                    # Expander for summary and instructions
+                    if 'summary' in recipe_info:
+                        with st.expander("Recipe Summary"):
+                            st.markdown(recipe_info['summary'], unsafe_allow_html=True)
+
+                    steps = []
+                    if 'analyzedInstructions' in recipe_info and recipe_info['analyzedInstructions']:
+                        for step in recipe_info['analyzedInstructions'][0]['steps']:
+                            steps.append(step['step'])
+
+                        with st.expander("Cooking Instructions"):
+                            for idx, step in enumerate(steps, 1):
+                                st.write(f"{idx}. {step}")
+
                     # Buttons to generate PDFs
                     if st.button(f"Save Recipe PDF: {recipe_info['title']}"):
-                        save_pdf(recipe_info['title'], ingredients_list, nutrients, f"{recipe_info['title']}.pdf")
-                        st.success("PDF saved!")
+                        save_recipe_pdf(recipe_info['title'], ingredients_list, recipe_info.get('summary', ''), steps, nutrients, f"{recipe_info['title']}.pdf")
+                        st.success("Recipe PDF saved!")
 
                     if st.button(f"Create Shopping List PDF: {recipe_info['title']}"):
-                        save_pdf(f"Shopping List for {recipe_info['title']}", ingredients_list, {}, f"Shopping_List_{recipe_info['title']}.pdf")
-                        st.success("Shopping list saved!")
+                        save_shopping_list_pdf(recipe_info['title'], ingredients_list, f"Shopping_List_{recipe_info['title']}.pdf")
+                        st.success("Shopping list PDF saved!")
 
                 with col2:
-                    # Plot selected chart type
                     df = create_ingredients_df(people_count, recipe)
                     plot_chart(df, chart_option)
