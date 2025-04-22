@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 from fpdf import FPDF
 import matplotlib.pyplot as plt
+from io import BytesIO
 
 # Read Spoonacular API Key from environment variable
 API_KEY = os.getenv("API_KEY")
@@ -49,8 +50,8 @@ def create_ingredients_df(people_count: int, recipe: dict) -> pd.DataFrame:
     df = pd.DataFrame(list(data.items()), columns=['Ingredient', 'Amount'])
     return df
 
-def save_recipe_pdf(title: str, ingredients: list, summary: str, steps: list, nutrients: dict, filename: str):
-    """Save full recipe (ingredients, summary, steps, nutrition) as a PDF."""
+def create_recipe_pdf(title: str, ingredients: list, summary: str, steps: list, nutrients: dict) -> BytesIO:
+    """Create a recipe PDF and return as BytesIO."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -71,10 +72,12 @@ def save_recipe_pdf(title: str, ingredients: list, summary: str, steps: list, nu
     pdf.cell(0, 10, f"Protein: {nutrients.get('protein', 'N/A')} g", ln=True)
     pdf.cell(0, 10, f"Fat: {nutrients.get('fat', 'N/A')} g", ln=True)
     pdf.cell(0, 10, f"Carbs: {nutrients.get('carbs', 'N/A')} g", ln=True)
-    pdf.output(filename)
 
-def save_shopping_list_pdf(title: str, ingredients: list, filename: str):
-    """Save only the shopping list as a PDF."""
+    pdf_bytes = pdf.output(dest='S').encode('latin-1')
+    return BytesIO(pdf_bytes)
+
+def create_shopping_list_pdf(title: str, ingredients: list) -> BytesIO:
+    """Create a shopping list PDF and return as BytesIO."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -82,7 +85,9 @@ def save_shopping_list_pdf(title: str, ingredients: list, filename: str):
     pdf.ln(5)
     for ing in ingredients:
         pdf.cell(0, 10, f"- {ing}", ln=True)
-    pdf.output(filename)
+
+    pdf_bytes = pdf.output(dest='S').encode('latin-1')
+    return BytesIO(pdf_bytes)
 
 def plot_chart(df: pd.DataFrame, chart_type: str):
     """Plot either a bar chart or pie chart of the ingredients."""
@@ -138,7 +143,7 @@ if st.button("Search Recipes"):
                                     nutrients['carbs'] = nutrient['amount']
                     st.write("**Nutrition:**", nutrients)
 
-                    # Expander for summary and instructions
+                    # Expanders for summary and steps
                     if 'summary' in recipe_info:
                         with st.expander("Recipe Summary"):
                             st.markdown(recipe_info['summary'], unsafe_allow_html=True)
@@ -152,14 +157,25 @@ if st.button("Search Recipes"):
                             for idx, step in enumerate(steps, 1):
                                 st.write(f"{idx}. {step}")
 
-                    # Buttons to generate PDFs
-                    if st.button(f"Save Recipe PDF: {recipe_info['title']}"):
-                        save_recipe_pdf(recipe_info['title'], ingredients_list, recipe_info.get('summary', ''), steps, nutrients, f"{recipe_info['title']}.pdf")
-                        st.success("Recipe PDF saved!")
+                    # Clean filename
+                    safe_title = recipe_info['title'].replace(' ', '_').replace('/', '_')
 
-                    if st.button(f"Create Shopping List PDF: {recipe_info['title']}"):
-                        save_shopping_list_pdf(recipe_info['title'], ingredients_list, f"Shopping_List_{recipe_info['title']}.pdf")
-                        st.success("Shopping list PDF saved!")
+                    # Download buttons
+                    recipe_pdf = create_recipe_pdf(recipe_info['title'], ingredients_list, recipe_info.get('summary', ''), steps, nutrients)
+                    st.download_button(
+                        label=f"Download Recipe PDF",
+                        data=recipe_pdf,
+                        file_name=f"{safe_title}.pdf",
+                        mime="application/pdf"
+                    )
+
+                    shopping_list_pdf = create_shopping_list_pdf(recipe_info['title'], ingredients_list)
+                    st.download_button(
+                        label=f"Download Shopping List PDF",
+                        data=shopping_list_pdf,
+                        file_name=f"Shopping_List_{safe_title}.pdf",
+                        mime="application/pdf"
+                    )
 
                 with col2:
                     df = create_ingredients_df(people_count, recipe)
