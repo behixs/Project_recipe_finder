@@ -1,32 +1,26 @@
-import os
 import requests
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# ——— Configuration ———
-# Option 1: Hole API-Key aus Umgebungsvariable (empfohlen)
-API_KEY = os.getenv("API_KEY")
-
-# Option 2 (nur zum Testen): Setze API-Key direkt hier ein
-# API_KEY = "DEIN_SPOONACULAR_API_KEY_HIER"
-
+# ——— Konfiguration ———
+API_KEY = "38383701bda9437486582fa552663a1a"  # 🔴 HIER DEINEN SPOONACULAR API-KEY EINFÜGEN
 API_BASE_URL = "https://api.spoonacular.com"
 
 st.set_page_config(page_title="Recipe Finder", page_icon="🍽️")
 st.title("🍽️ Recipe Finder")
 st.write("Entdecke köstliche Rezepte basierend auf deinen vorhandenen Zutaten!")
 
-# ——— Warnung bei fehlendem API-Key ———
-if not API_KEY:
-    st.error("❌ Kein API-Key gefunden! Bitte setze `API_KEY` als Umgebungsvariable oder direkt im Code.")
+# ——— Fehler bei fehlendem Key ———
+if not API_KEY or API_KEY == "DEIN_API_KEY_HIER_EINFÜGEN":
+    st.error("❌ Kein gültiger API-Key. Bitte ersetze `API_KEY` oben im Code durch deinen Spoonacular API-Key.")
     st.stop()
 
 # ——— Session State Initialization ———
 if "recipes_data" not in st.session_state:
     st.session_state.recipes_data = []
 
-# ——— Input Widgets ———
+# ——— Eingabe ———
 people_count = st.number_input(
     "Anzahl der Personen",
     min_value=1,
@@ -42,12 +36,12 @@ ingredients = st.text_input(
     placeholder="z. B. mehl, eier, milch",
 )
 
-# ——— Fetch Functions ———
+# ——— Daten holen ———
 def fetch_recipes(ingredients_str: str):
     params = {
         "apiKey": API_KEY,
         "ingredients": ingredients_str,
-        "number": 5,  # max 5 Ergebnisse
+        "number": 5,
         "ranking": 1,
     }
     resp = requests.get(f"{API_BASE_URL}/recipes/findByIngredients", params=params)
@@ -62,7 +56,7 @@ def fetch_nutrition(recipe_id: int) -> dict:
     resp.raise_for_status()
     return resp.json()
 
-# ——— Search Action ———
+# ——— Rezeptsuche ———
 if st.button("🔍 Rezepte suchen"):
     ingr = ingredients.strip()
     if not ingr:
@@ -74,7 +68,7 @@ if st.button("🔍 Rezepte suchen"):
             st.error(f"API Fehler: {e}")
             st.session_state.recipes_data = []
 
-# ——— Display Results ———
+# ——— Ergebnisse anzeigen ———
 recipes = st.session_state.recipes_data
 
 if not isinstance(recipes, list) or not recipes:
@@ -84,7 +78,6 @@ else:
         st.subheader(recipe.get("title", "Unbenanntes Rezept"))
         col1, col2 = st.columns([1, 2])
 
-        # — Left: Ingredients
         with col1:
             for kind in ("usedIngredients", "missedIngredients", "unusedIngredients"):
                 items = recipe.get(kind, [])
@@ -97,7 +90,6 @@ else:
                         name = ing.get("originalName") or ing.get("name")
                         st.write(f"- {amt:g} {unit} {name}")
 
-        # — Right: Image, Bar Chart, Nutrition
         with col2:
             if recipe.get("image"):
                 st.image(recipe["image"], caption=recipe.get("title", ""), use_container_width=True)
@@ -111,7 +103,6 @@ else:
             df.index.name = "Zutat"
             st.bar_chart(df)
 
-            # Macronutrients
             try:
                 nutrition = fetch_nutrition(recipe.get("id"))
                 carbs = float(nutrition.get("carbs", "0g").rstrip("g")) * people_count
@@ -143,5 +134,3 @@ else:
 
             except requests.HTTPError:
                 st.warning("⚠️ Nährwertdaten konnten nicht geladen werden.")
-
-
