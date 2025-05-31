@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # ——— Configuration ———
-API_KEY = os.getenv("API_KEY")
+API_KEY = "38383701bda9437486582fa552663a1a"
 API_BASE_URL = "https://api.spoonacular.com"
 
 st.set_page_config(page_title="Recipe Finder", page_icon="🍽️")
