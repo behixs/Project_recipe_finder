@@ -13,8 +13,7 @@ import matplotlib.pyplot as plt
 
 
 # Load API key and base URL for Spoonacular
-# The API key is saved directly in the settings of the Streamlit App
-API_KEY = os.getenv("API_KEY")
+API_KEY = "4b1abeabfae84cddae3ee1e0803ebc01"
 API_BASE_URL = "https://api.spoonacular.com"
 
 # Setup Streamlit page
